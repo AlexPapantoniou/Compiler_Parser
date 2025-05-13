@@ -9,16 +9,24 @@ class A {
 
     public int foo(int i, int j) {
         int k;
-        k = i+j;
+        k = i + j;
 
-        return k; 
+        return k;
     }
-    public int bar(){ return 1; }
+
+    public int bar() {
+        return 1;
+    }
 }
 
 class B extends A {
     int i;
 
-    public int foo(int i, int j) { return i+j; }
-    public int foobar(boolean k){ return 1; }
+    public int foo(int i, int j) {
+        return i + j;
+    }
+
+    public int foobar(boolean k) {
+        return 1;
+    }
 }
