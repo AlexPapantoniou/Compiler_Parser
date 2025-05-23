@@ -1,19 +1,19 @@
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
+
 import syntaxtree.*;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        if(args.length != 1){
+        if (args.length != 1) {
             System.err.println("Usage: java Main <inputFile>");
             System.exit(1);
         }
 
-
-
         FileInputStream fis = null;
-        try{
+        try {
             fis = new FileInputStream(args[0]);
             MiniJavaParser parser = new MiniJavaParser(fis);
 
@@ -22,19 +22,17 @@ public class Main {
             System.err.println("Program parsed successfully.");
 
             MyVisitor eval = new MyVisitor();
+
             root.accept(eval, null);
-        }
-        catch(ParseException ex){
+        } catch (ParseException ex) {
             System.out.println(ex.getMessage());
-        }
-        catch(FileNotFoundException ex){
+        } catch (FileNotFoundException ex) {
             System.err.println(ex.getMessage());
-        }
-        finally{
-            try{
-                if(fis != null) fis.close();
-            }
-            catch(IOException ex){
+        } finally {
+            try {
+                if (fis != null)
+                    fis.close();
+            } catch (IOException ex) {
                 System.err.println(ex.getMessage());
             }
         }
