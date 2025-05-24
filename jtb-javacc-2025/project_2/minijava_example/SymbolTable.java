@@ -243,10 +243,18 @@ public class SymbolTable {
      */
     public boolean declare_method(String class_name, String method_name, String return_type, List<Param> params) {
         ClassSymbol cls = classes.get(class_name);
-        if (cls == null || cls.methods.containsKey(method_name)) {
+        if (cls == null) {
+            return false;
+        }
+        Symbol method = cls.methods.get(method_name);
+        if (method != null && (!method.type.equals(return_type) || !method.params.equals(params))) {
+            // No overloading
             return false;
         }
         cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, null, 0));
+        for (Param param : params) {
+            declare_var(param.name, param.type);
+        }
         return true;
     }
 
@@ -348,9 +356,6 @@ public class SymbolTable {
 
         // Enter the method scope for main (begin tracking method locals)
         st.enter_method_scope("Main", "main");
-        for (Param param : st.lookup_method("Main", "main").params) {
-            st.declare_var(param.name, param.type);
-        }
 
         // Declare variables in main method scope and nested blocks
         st.declare_var("temp", "int");
