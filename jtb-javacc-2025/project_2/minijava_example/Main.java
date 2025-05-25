@@ -23,6 +23,7 @@ public class Main {
             MyVisitor eval = new MyVisitor();
 
             root.accept(eval, null);
+
         } catch (ParseException ex) {
             System.out.println(ex.getMessage());
         } catch (FileNotFoundException ex) {

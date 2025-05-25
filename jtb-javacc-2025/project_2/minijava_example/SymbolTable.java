@@ -5,6 +5,7 @@ public class SymbolTable {
     // Enumeration of kinds of symbols we track
     public enum Kind {
         VARIABLE, // local variables in method/block scopes
+        ARRAY, // array type variables
         FIELD, // class fields
         METHOD, // methods inside classes
         CLASS // classes themselves
@@ -12,12 +13,16 @@ public class SymbolTable {
 
     // Parameter info for methods: name and type
     public static class Param {
-        public final String name;
-        public final String type;
+        public final String name; // name of the parameter
+        public final String type; // "int" or "boolean"
+        public final Kind kind; // VARIABLE or ARRAY
+        public final int size; // only for arrays
 
-        public Param(String name, String type) {
+        public Param(String name, String type, Kind kind, int size) {
             this.name = name;
             this.type = type;
+            this.kind = kind;
+            this.size = size;
         }
 
         @Override
@@ -31,15 +36,17 @@ public class SymbolTable {
         public final String name; // symbol name
         public final Kind kind; // kind (variable, method, etc)
         public final String type; // type info (e.g. "int", "boolean", "table")
+        public final int size; // size of array (only for array type variables)
         public final List<Param> params; // method parameters (if kind==METHOD)
-        public Object value; // assigned value (only for debugging)
+        public Object value; // assigned value (for debugging)
         public final int scopeLevel; // scope depth level (0=outermost)
         public Map<String, Symbol> method_locals; // local variables in method scope (only for METHOD)
 
-        public Symbol(String name, Kind kind, String type, List<Param> params, Object value, int scopeLevel) {
+        public Symbol(String name, Kind kind, String type, int size, List<Param> params, Object value, int scopeLevel) {
             this.name = name;
             this.kind = kind;
             this.type = type;
+            this.size = size;
             this.params = params;
             this.value = value;
             this.scopeLevel = scopeLevel;
@@ -143,8 +150,17 @@ public class SymbolTable {
             throw new IllegalArgumentException("Method '" + method_name + "' not found in class '" + class_name + "'.");
         }
 
-        // Initialize locals map for this method (clearing any previous locals)
+        // Initialize locals map for this method and set the parameters as local
+        // variables
         current_method.method_locals = new LinkedHashMap<>();
+
+        if (!current_method.params.isEmpty()) {
+            Map<String, Symbol> scope = scopes.get(current_scope);
+            for (Param param : current_method.params) {
+                scope.put(param.name,
+                        new Symbol(param.name, param.kind, param.type, param.size, null, null, current_scope));
+            }
+        }
     }
 
     /**
@@ -196,7 +212,20 @@ public class SymbolTable {
         if (scope.containsKey(name)) {
             return false; // redeclaration in same scope not allowed
         }
-        scope.put(name, new Symbol(name, Kind.VARIABLE, type, null, null, current_scope));
+        scope.put(name, new Symbol(name, Kind.VARIABLE, type, 0, null, null, current_scope));
+        return true;
+    }
+
+    public boolean declare_array(String name, String type, int size) {
+        if (scopes.isEmpty()) {
+            // Enter scope if user forgot to
+            enter_scope();
+        }
+        Map<String, Symbol> scope = scopes.get(current_scope);
+        if (scope.containsKey(name)) {
+            return false;
+        }
+        scope.put(name, new Symbol(name, Kind.ARRAY, type, size, null, null, current_scope));
         return true;
     }
 
@@ -221,14 +250,14 @@ public class SymbolTable {
      * class_name: the class name
      * field_name: field name
      * type: field type
-     * returns false if class or field already exists, true if success
+     * returns false if class doesn't exist or field already exists, true if success
      */
-    public boolean declare_field(String class_name, String field_name, String type) {
+    public boolean declare_field(String class_name, String field_name, String type, int size) {
         ClassSymbol cls = classes.get(class_name);
         if (cls == null || cls.fields.containsKey(field_name)) {
             return false;
         }
-        cls.fields.put(field_name, new Symbol(field_name, Kind.FIELD, type, null, null, 0));
+        cls.fields.put(field_name, new Symbol(field_name, Kind.FIELD, type, size, null, null, 0));
         return true;
     }
 
@@ -239,22 +268,25 @@ public class SymbolTable {
      * method_name: method name
      * return_type: return type
      * params: list of parameters
-     * returns false if class or method already exists, true if success
+     * returns false if class doesn't exist or method already exists, true if
+     * success
      */
     public boolean declare_method(String class_name, String method_name, String return_type, List<Param> params) {
         ClassSymbol cls = classes.get(class_name);
-        if (cls == null) {
+        if (cls == null || cls.methods.containsKey(method_name)) {
+            // Check if class already contains a method with this name
             return false;
         }
-        Symbol method = cls.methods.get(method_name);
-        if (method != null && (!method.type.equals(return_type) || !method.params.equals(params))) {
-            // No overloading
-            return false;
+        ClassSymbol super_cls = classes.get(cls.super_class);
+        if (super_cls != null) {
+            Symbol method = super_cls.methods.get(method_name);
+            // Check if super class has a method with the same name
+            if (method != null && (!method.type.equals(return_type) || !method.params.equals(params))) {
+                // No overloading
+                return false;
+            }
         }
-        cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, null, 0));
-        for (Param param : params) {
-            declare_var(param.name, param.type);
-        }
+        cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, 0, params, null, 0));
         return true;
     }
 
@@ -352,7 +384,7 @@ public class SymbolTable {
 
         // Declare class Main and its main method
         st.declare_class("Main", null);
-        st.declare_method("Main", "main", "void", List.of(new Param("temp", "boolean")));
+        st.declare_method("Main", "main", "void", List.of());
 
         // Enter the method scope for main (begin tracking method locals)
         st.enter_method_scope("Main", "main");
@@ -378,12 +410,18 @@ public class SymbolTable {
 
         // Declare classes Animal and Dog with inheritance
         st.declare_class("Animal", null);
-        st.declare_field("Animal", "age", "int");
-        st.declare_method("Animal", "speak", "void", List.of());
+        st.declare_field("Animal", "age", "int[]", 0);
+        st.declare_method("Animal", "speak", "void", List.of(new Param("temp", "boolean", Kind.VARIABLE, 0)));
+        st.enter_method_scope("Animal", "speak");
+        // st.declare_var("temp", "int");
+        st.exit_method_scope();
 
         st.declare_class("Dog", "Animal");
-        st.declare_field("Dog", "breed", "string");
+        st.declare_field("Dog", "breed", "string", 0);
         st.declare_method("Dog", "bark", "void", List.of());
+        st.enter_method_scope("Dog", "bark");
+        st.declare_var("temp", "int");
+        st.exit_method_scope();
 
         // Print all scopes and classes with methods and locals
         st.print_all();
