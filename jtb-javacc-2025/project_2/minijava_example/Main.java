@@ -22,7 +22,9 @@ public class Main {
 
             MyVisitor eval = new MyVisitor();
 
-            root.accept(eval, null);
+            SymbolTable st = new SymbolTable();
+            root.accept(eval, st);
+            st.print_all();
 
         } catch (ParseException ex) {
             System.out.println(ex.getMessage());

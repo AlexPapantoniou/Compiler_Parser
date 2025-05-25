@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.List;
 
 import syntaxtree.*;
@@ -31,11 +32,10 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         st.declare_class(class_name, null);
 
         String param_name = n.f11.accept(this, st);
-        st.declare_method(class_name, "main", "void",
-                List.of(new SymbolTable.Param(param_name, "String", SymbolTable.Kind.ARRAY, 0)));
-        st.enter_method_scope(class_name, "main");
+        st.declare_method("main", "void",
+                List.of(new SymbolTable.Param(param_name, "String[]", SymbolTable.Kind.ARRAY)));
+
         super.visit(n, st);
-        st.exit_method_scope();
 
         System.out.println();
 
@@ -55,14 +55,16 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         n.f0.accept(this, st);
 
         String class_name = n.f1.accept(this, st);
-        System.out.println("Class: " + class_name);
+        st.declare_class(class_name, null);
 
         n.f2.accept(this, st);
-        // System.out.println("Fields: ");
+        st.enter_class_scope(class_name);
         n.f3.accept(this, st);
+
         System.out.println("Methods: ");
         n.f4.accept(this, st);
         n.f5.accept(this, st);
+        st.exit_class_scope();
 
         System.out.println();
 
@@ -109,7 +111,11 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         String _ret = null;
         String type = n.f0.accept(this, st);
         String var = n.f1.accept(this, st);
-        st.declare_var(var, type);
+        if (st.current_method == null) {
+            st.declare_field(var, type);
+        } else {
+            st.declare_var(var, type);
+        }
         super.visit(n, st);
 
         return _ret;
@@ -144,13 +150,8 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(IfStatement n, SymbolTable st) throws Exception {
-        n.f2.accept(this, st); // evaluate condition
-        st.enter_scope();
         n.f4.accept(this, st); // if block
-        st.exit_scope();
-        st.enter_scope();
         n.f6.accept(this, st); // else block
-        st.exit_scope();
         return null;
     }
 
@@ -163,10 +164,7 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(WhileStatement n, SymbolTable st) throws Exception {
-        n.f2.accept(this, st); // evaluate condition
-        st.enter_scope();
         n.f4.accept(this, st); // while block
-        st.exit_scope();
         return null;
     }
 
@@ -239,15 +237,26 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(MethodDeclaration n, SymbolTable st) throws Exception {
-        String argumentList = n.f4.present() ? n.f4.accept(this, null) : "";
+        String argument_list = n.f4.present() ? n.f4.accept(this, null) : "";
 
-        String myType = n.f1.accept(this, null);
-        String myName = n.f2.accept(this, null);
+        String my_type = n.f1.accept(this, null);
+        String my_name = n.f2.accept(this, null);
 
-        System.out.println("Method: " + myType + " " + myName + " (" + argumentList + ")");
-        System.out.println("Local vars:");
+        String[] argument_list_split = argument_list.split(",");
+        List<SymbolTable.Param> params = new ArrayList<>();
+        for (String argument : argument_list_split) {
+            String[] parts = argument.trim().split("\\s+");
+            if (parts.length == 2) {
+                params.add(new SymbolTable.Param(parts[1], parts[0],
+                        parts[0].endsWith("[]") ? SymbolTable.Kind.ARRAY : SymbolTable.Kind.VARIABLE));
+            }
+        }
 
+        st.declare_method(my_name, my_type, params);
+        st.enter_method_scope(my_name);
         super.visit(n, st);
+        st.exit_method_scope();
+
         return null;
     }
 
