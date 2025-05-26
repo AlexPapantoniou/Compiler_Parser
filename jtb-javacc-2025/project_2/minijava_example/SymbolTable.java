@@ -278,11 +278,35 @@ public class SymbolTable {
         }
         ClassSymbol super_cls = classes.get(cls.super_class);
         if (super_cls != null) {
-            Symbol method = super_cls.methods.get(method_name);
-            // Check if super class has a method with the same name
-            if (method != null && (!method.type.equals(return_type) || !method.params.equals(params))) {
-                // No overloading
-                return false;
+            Symbol super_method = super_cls.methods.get(method_name);
+            if (super_method != null) {
+                // Method exists in superclass - check signature
+                boolean same_return_type = super_method.type.equals(return_type);
+                boolean same_params = false;
+
+                // Handle null params case
+                if (super_method.params == null && params == null) {
+                    same_params = true;
+                } else if (super_method.params != null && params != null) {
+                    // Compare parameter lists
+                    if (super_method.params.size() == params.size()) {
+                        same_params = true;
+                        for (int i = 0; i < params.size(); i++) {
+                            Param p1 = super_method.params.get(i);
+                            Param p2 = params.get(i);
+                            if (!p1.type.equals(p2.type)) {
+                                same_params = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!same_return_type || !same_params) {
+                    System.err.println("Error: Method " + method_name + " in class " + current_class +
+                            " has different signature than superclass method");
+                    return false;
+                }
             }
         }
         cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, null, 0));
