@@ -39,6 +39,8 @@ public class SymbolTable {
         public Object value; // assigned value (for debugging)
         public final int scopeLevel; // scope depth level (0=outermost)
         public Map<String, Symbol> method_locals; // local variables in method scope (only for METHOD)
+        public int method_start_scope; // start index of method scope in scopes list
+        public int method_finish_scope; // start index of method scope in scopes list
 
         public Symbol(String name, Kind kind, String type, List<Param> params, Object value, int scopeLevel) {
             this.name = name;
@@ -50,7 +52,11 @@ public class SymbolTable {
             // Initialize method locals map only for methods
             if (kind == Kind.METHOD) {
                 this.method_locals = new LinkedHashMap<>();
+            } else {
+                this.method_locals = null; // no locals for non-method symbols
             }
+            this.method_start_scope = -1;
+            this.method_finish_scope = -1;
         }
 
         @Override
@@ -120,6 +126,7 @@ public class SymbolTable {
             throw new IllegalStateException(
                     "Cannot exit method scope using exit_scope(), use exit_method_scope() instead.");
         }
+        current_method.method_finish_scope = current_scope;
         // Remove current scope from stack and collect its locals into current method
         // locals
         Map<String, Symbol> exiting_scope = scopes.remove(current_scope);
@@ -163,6 +170,8 @@ public class SymbolTable {
         // Initialize locals map for this method and set the parameters as local
         // variables
         current_method.method_locals = new LinkedHashMap<>();
+        current_method.method_start_scope = method_start_scope;
+        current_method.method_finish_scope = method_start_scope;
 
         if (!current_method.params.isEmpty()) {
             Map<String, Symbol> scope = scopes.get(current_scope);
@@ -213,17 +222,17 @@ public class SymbolTable {
      * returns false if already declared in this scope, true if declared
      * successfully
      */
-    public boolean declare_var(String name, String type) {
+    public boolean declare_var(String var_name, String type) {
         if (scopes.isEmpty()) {
             // Enter scope if user forgot to
             enter_scope();
         }
         Map<String, Symbol> scope = scopes.get(current_scope);
-        if (scope.containsKey(name)) {
+        if (scope.containsKey(var_name)) {
             return false; // redeclaration in same scope not allowed
         }
         Kind kind = (type.endsWith("[]")) ? Kind.ARRAY : Kind.VARIABLE;
-        scope.put(name, new Symbol(name, kind, type, null, null, current_scope));
+        scope.put(var_name, new Symbol(var_name, kind, type, null, null, current_scope));
         return true;
     }
 
@@ -234,11 +243,11 @@ public class SymbolTable {
      * super_class: name of super_class (or null)
      * returns false if class already declared, true if success
      */
-    public boolean declare_class(String name, String super_class) {
-        if (classes.containsKey(name)) {
+    public boolean declare_class(String class_name, String super_class) {
+        if (classes.containsKey(class_name)) {
             return false;
         }
-        classes.put(name, new ClassSymbol(name, super_class));
+        classes.put(class_name, new ClassSymbol(class_name, super_class));
         return true;
     }
 
@@ -384,6 +393,60 @@ public class SymbolTable {
             cls = classes.get(cls.super_class);
         }
         return null;
+    }
+
+    // Get the type of a variable by name, searching in current scope and class
+    // fields
+    public String get_var_type(String var_name) {
+        Symbol sym = lookup(var_name);
+        if (sym != null) {
+            // Variable is in scope
+            return sym.type;
+        }
+        sym = lookup_field(current_class, var_name);
+        if (sym != null) {
+            // Variable is a field of the current class
+            return sym.type;
+        }
+        return null; // variable not found
+    }
+
+    // Get the return type of a method
+    public String get_method_return_type(String class_name, String method_name) {
+        Symbol method = lookup_method(class_name, method_name);
+        if (method != null) {
+            return method.type;
+        }
+        return null; // method not found
+    }
+
+    // Get parameter types of a method
+    public List<Param> get_method_params(String class_name, String method_name) {
+        Symbol method = lookup_method(class_name, method_name);
+        if (method != null) {
+            return method.params;
+        }
+        return null;
+    }
+
+    /**
+     * Check if a class with the given name exists
+     * 
+     * name: class name
+     * returns true if class exists, false otherwise
+     */
+    public boolean is_class(String name) {
+        return classes.containsKey(name);
+    }
+
+    /**
+     * Get the ClassSymbol for a class by name
+     * 
+     * class_name: name of the class
+     * returns ClassSymbol or null if not found
+     */
+    public ClassSymbol get_class(String class_name) {
+        return classes.get(class_name);
     }
 
     /**

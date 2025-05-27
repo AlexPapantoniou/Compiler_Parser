@@ -20,10 +20,12 @@ public class Main {
 
             System.err.println("Program parsed successfully.");
 
-            MyVisitor eval = new MyVisitor();
+            MyVisitor my_vis = new MyVisitor();
 
             SymbolTable st = new SymbolTable();
-            root.accept(eval, st);
+            root.accept(my_vis, st);
+            TypeChecker typechecker = new TypeChecker();
+            root.accept(typechecker, st);
             st.print_all();
 
         } catch (ParseException ex) {
