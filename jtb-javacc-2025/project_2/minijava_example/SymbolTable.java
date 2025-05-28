@@ -105,7 +105,7 @@ public class SymbolTable {
     public Symbol current_method = null;
 
     // Track the current class
-    private String current_class = null;
+    public String current_class = null;
 
     /**
      * Enter a new nested scope (block or method)
@@ -137,10 +137,6 @@ public class SymbolTable {
     }
 
     public void enter_class_scope(String class_name) {
-        if (!classes.containsKey(class_name)) {
-            throw new IllegalArgumentException(
-                    "Class " + class_name + " has not been declared");
-        }
         current_class = class_name;
     }
 
@@ -303,7 +299,7 @@ public class SymbolTable {
                         for (int i = 0; i < params.size(); i++) {
                             Param p1 = super_method.params.get(i);
                             Param p2 = params.get(i);
-                            if (!p1.type.equals(p2.type)) {
+                            if (!p1.type.equals(p2.type) || !p1.name.equals(p2.name)) {
                                 same_params = false;
                                 break;
                             }
