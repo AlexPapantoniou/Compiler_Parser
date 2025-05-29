@@ -26,7 +26,7 @@ public class Main {
             root.accept(my_vis, st);
             TypeChecker typechecker = new TypeChecker();
             root.accept(typechecker, st);
-            st.print_all();
+            st.print_offsets();
 
         } catch (ParseException ex) {
             System.out.println(ex.getMessage());

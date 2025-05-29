@@ -41,8 +41,10 @@ public class SymbolTable {
         public Map<String, Symbol> method_locals; // local variables in method scope (only for METHOD)
         public int method_start_scope; // start index of method scope in scopes list
         public int method_finish_scope; // start index of method scope in scopes list
+        public int offset;
 
-        public Symbol(String name, Kind kind, String type, List<Param> params, Object value, int scopeLevel) {
+        public Symbol(String name, Kind kind, String type, List<Param> params, Object value, int scopeLevel,
+                int offset) {
             this.name = name;
             this.kind = kind;
             this.type = type;
@@ -57,6 +59,7 @@ public class SymbolTable {
             }
             this.method_start_scope = -1;
             this.method_finish_scope = -1;
+            this.offset = offset;
         }
 
         @Override
@@ -77,10 +80,14 @@ public class SymbolTable {
         public final String super_class; // name of super_class or null
         public final Map<String, Symbol> fields = new LinkedHashMap<>();
         public final Map<String, Symbol> methods = new LinkedHashMap<>();
+        public int max_field_offset;
+        public int max_method_offset;
 
-        public ClassSymbol(String name, String super_class) {
+        public ClassSymbol(String name, String super_class, int max_field_offset, int max_method_offset) {
             this.name = name;
             this.super_class = super_class;
+            this.max_field_offset = max_field_offset;
+            this.max_method_offset = max_method_offset;
         }
 
         @Override
@@ -173,7 +180,7 @@ public class SymbolTable {
             Map<String, Symbol> scope = scopes.get(current_scope);
             for (Param param : current_method.params) {
                 scope.put(param.name,
-                        new Symbol(param.name, param.kind, param.type, null, null, current_scope));
+                        new Symbol(param.name, param.kind, param.type, null, null, current_scope, 0));
             }
         }
     }
@@ -228,7 +235,7 @@ public class SymbolTable {
             return false; // redeclaration in same scope not allowed
         }
         Kind kind = (type.endsWith("[]")) ? Kind.ARRAY : Kind.VARIABLE;
-        scope.put(var_name, new Symbol(var_name, kind, type, null, null, current_scope));
+        scope.put(var_name, new Symbol(var_name, kind, type, null, null, current_scope, 0));
         return true;
     }
 
@@ -239,11 +246,11 @@ public class SymbolTable {
      * super_class: name of super_class (or null)
      * returns false if class already declared, true if success
      */
-    public boolean declare_class(String class_name, String super_class) {
+    public boolean declare_class(String class_name, String super_class, int max_field_offset, int max_method_offset) {
         if (classes.containsKey(class_name)) {
             return false;
         }
-        classes.put(class_name, new ClassSymbol(class_name, super_class));
+        classes.put(class_name, new ClassSymbol(class_name, super_class, max_field_offset, max_method_offset));
         return true;
     }
 
@@ -255,13 +262,13 @@ public class SymbolTable {
      * type: field type
      * returns false if class doesn't exist or field already exists, true if success
      */
-    public boolean declare_field(String field_name, String type) {
+    public boolean declare_field(String field_name, String type, int offset) {
         ClassSymbol cls = classes.get(current_class);
         if (cls == null || cls.fields.containsKey(field_name)) {
             return false;
         }
         Kind kind = (type.endsWith("[]")) ? Kind.FIELD_ARRAY : Kind.FIELD_VARIABLE;
-        cls.fields.put(field_name, new Symbol(field_name, kind, type, null, null, 0));
+        cls.fields.put(field_name, new Symbol(field_name, kind, type, null, null, 0, offset));
         return true;
     }
 
@@ -275,7 +282,7 @@ public class SymbolTable {
      * returns false if class doesn't exist or method already exists, true if
      * success
      */
-    public boolean declare_method(String method_name, String return_type, List<Param> params) {
+    public boolean declare_method(String method_name, String return_type, List<Param> params, int offset) {
         ClassSymbol cls = classes.get(current_class);
         if (cls == null || cls.methods.containsKey(method_name)) {
             // Check if class already contains a method with this name
@@ -290,7 +297,7 @@ public class SymbolTable {
                 boolean same_params = false;
 
                 // Handle null params case
-                if (super_method.params == null && params == null) {
+                if (super_method.params.isEmpty() && params.isEmpty()) {
                     same_params = true;
                 } else if (super_method.params != null && params != null) {
                     // Compare parameter lists
@@ -314,7 +321,7 @@ public class SymbolTable {
                 }
             }
         }
-        cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, null, 0));
+        cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, null, 0, offset));
         return true;
     }
 
@@ -357,8 +364,7 @@ public class SymbolTable {
     }
 
     /**
-     * Lookup a variable by name searching from innermost scope outward.
-     * Does NOT look inside classes or methods.
+     * Lookup a variable by name in method scope and class fields.
      * 
      * name: variable name
      * returns Symbol or null if not found
@@ -409,40 +415,6 @@ public class SymbolTable {
         return null;
     }
 
-    // Get the type of a variable by name, searching in current scope and class
-    // fields
-    public String get_var_type(String var_name) {
-        Symbol sym = lookup(var_name);
-        if (sym != null) {
-            // Variable is in scope
-            return sym.type;
-        }
-        sym = lookup_field(current_class, var_name);
-        if (sym != null) {
-            // Variable is a field of the current class
-            return sym.type;
-        }
-        return null; // variable not found
-    }
-
-    // Get the return type of a method
-    public String get_method_return_type(String class_name, String method_name) {
-        Symbol method = lookup_method(class_name, method_name);
-        if (method != null) {
-            return method.type;
-        }
-        return null; // method not found
-    }
-
-    // Get parameter types of a method
-    public List<Param> get_method_params(String class_name, String method_name) {
-        Symbol method = lookup_method(class_name, method_name);
-        if (method != null) {
-            return method.params;
-        }
-        return null;
-    }
-
     /**
      * Check if a class with the given name exists
      * 
@@ -466,76 +438,75 @@ public class SymbolTable {
     /**
      * Print all scopes and classes for debugging
      */
-    public void print_all() {
-        System.out.println("\n== Classes ==");
+    public void print_offsets() {
         for (ClassSymbol cls : classes.values()) {
-            System.out.println(cls);
+            for (Symbol field : cls.fields.values()) {
+                System.out.println(cls.name + "." + field.name + ": " + field.offset);
+            }
             for (Symbol method : cls.methods.values()) {
-                System.out.println("    " + method);
-                if (method.method_locals != null) {
-                    System.out.println("      Locals: " + method.method_locals.keySet());
-                }
+                System.out.println(cls.name + "." + method.name + ": " + method.offset);
             }
         }
     }
 
     public static void main(String[] args) {
-        SymbolTable st = new SymbolTable();
+        // SymbolTable st = new SymbolTable();
 
-        // Declare class Main and its main method
-        st.declare_class("Main", null);
-        st.declare_method("main", "void", List.of());
+        // // Declare class Main and its main method
+        // st.declare_class("Main", null);
+        // st.declare_method("main", "void", List.of());
 
-        // Enter the method scope for main (begin tracking method locals)
-        st.enter_method_scope("main");
+        // // Enter the method scope for main (begin tracking method locals)
+        // st.enter_method_scope("main");
 
-        // Declare variables in main method scope and nested blocks
-        st.declare_var("temp", "int");
-        st.assign("temp", 100);
-
-        // if block scope inside main method
-        st.enter_scope();
-        st.declare_var("cond", "boolean");
-        st.assign("cond", true);
-        st.exit_scope(); // exit if block, locals merged into main method locals
-
-        // while block scope inside main method
-        st.enter_scope();
-        st.declare_var("counter", "int");
-        st.assign("counter", 0);
-        st.exit_scope(); // exit while block, locals merged into main method locals
-
-        // Exit method scope: gather all locals declared in main method
-        st.exit_method_scope();
-
-        // Declare classes Animal and Dog with inheritance
-        st.declare_class("Animal", null);
-        st.declare_field("age", "int[]");
-        st.declare_method("speak", "void", List.of(new Param("temp", "boolean", Kind.VARIABLE)));
-        st.enter_method_scope("speak");
+        // // Declare variables in main method scope and nested blocks
         // st.declare_var("temp", "int");
-        st.exit_method_scope();
+        // st.assign("temp", 100);
 
-        st.declare_class("Dog", "Animal");
-        st.declare_field("breed", "string");
-        st.declare_method("bark", "void", List.of());
-        st.enter_method_scope("bark");
-        st.declare_var("temp", "int");
-        st.exit_method_scope();
+        // // if block scope inside main method
+        // st.enter_scope();
+        // st.declare_var("cond", "boolean");
+        // st.assign("cond", true);
+        // st.exit_scope(); // exit if block, locals merged into main method locals
 
-        // Print all scopes and classes with methods and locals
-        st.print_all();
+        // // while block scope inside main method
+        // st.enter_scope();
+        // st.declare_var("counter", "int");
+        // st.assign("counter", 0);
+        // st.exit_scope(); // exit while block, locals merged into main method locals
 
-        // Lookup inherited method speak on Dog class
-        Symbol speak = st.lookup_method("Dog", "speak");
-        System.out.println("\nLookup Dog.speak (inherited method): " + speak);
-        System.out.println("Lookup local variables in Dog.speak (should be null): " +
-                (speak == null ? null : speak.method_locals));
+        // // Exit method scope: gather all locals declared in main method
+        // st.exit_method_scope();
 
-        // Lookup main method in Main class and its locals
-        Symbol mainMethod = st.lookup_method("Main", "main");
-        System.out.println("\nLookup Main.main method: " + mainMethod);
-        System.out.println("Lookup local variable 'temp' in Main.main: " +
-                (mainMethod == null ? null : mainMethod.method_locals.get("temp")));
+        // // Declare classes Animal and Dog with inheritance
+        // st.declare_class("Animal", null);
+        // st.declare_field("age", "int[]");
+        // st.declare_method("speak", "void", List.of(new Param("temp", "boolean",
+        // Kind.VARIABLE)));
+        // st.enter_method_scope("speak");
+        // // st.declare_var("temp", "int");
+        // st.exit_method_scope();
+
+        // st.declare_class("Dog", "Animal");
+        // st.declare_field("breed", "string");
+        // st.declare_method("bark", "void", List.of());
+        // st.enter_method_scope("bark");
+        // st.declare_var("temp", "int");
+        // st.exit_method_scope();
+
+        // // Print all scopes and classes with methods and locals
+        // st.print_all();
+
+        // // Lookup inherited method speak on Dog class
+        // Symbol speak = st.lookup_method("Dog", "speak");
+        // System.out.println("\nLookup Dog.speak (inherited method): " + speak);
+        // System.out.println("Lookup local variables in Dog.speak (should be null): " +
+        // (speak == null ? null : speak.method_locals));
+
+        // // Lookup main method in Main class and its locals
+        // Symbol mainMethod = st.lookup_method("Main", "main");
+        // System.out.println("\nLookup Main.main method: " + mainMethod);
+        // System.out.println("Lookup local variable 'temp' in Main.main: " +
+        // (mainMethod == null ? null : mainMethod.method_locals.get("temp")));
     }
 }

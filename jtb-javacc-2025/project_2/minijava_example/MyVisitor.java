@@ -6,6 +6,9 @@ import visitor.*;
 
 class MyVisitor extends GJDepthFirst<String, SymbolTable> {
 
+    private int field_offset;
+    private int method_offset;
+
     /**
      * f0 -> "class"
      * f1 -> Identifier()
@@ -29,12 +32,17 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
     @Override
     public String visit(MainClass n, SymbolTable st) throws Exception {
         String class_name = n.f1.accept(this, st);
-        st.declare_class(class_name, null);
+        st.declare_class(class_name, null, 0, 0);
         st.enter_class_scope(class_name);
 
+        field_offset = 0;
+        method_offset = 0;
         String param_name = n.f11.accept(this, st);
         st.declare_method("main", "void",
-                List.of(new SymbolTable.Param(param_name, "String[]", SymbolTable.Kind.ARRAY)));
+                List.of(new SymbolTable.Param(param_name, "String[]", SymbolTable.Kind.ARRAY)), method_offset);
+        method_offset += 8;
+        SymbolTable.ClassSymbol main_class = st.get_class(class_name);
+        main_class.max_method_offset = method_offset;
 
         st.enter_method_scope("main");
         super.visit(n, st);
@@ -58,11 +66,13 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         n.f0.accept(this, st);
 
         String class_name = n.f1.accept(this, st);
-        st.declare_class(class_name, null);
+        st.declare_class(class_name, null, 0, 0);
 
         n.f2.accept(this, st);
         st.enter_class_scope(class_name);
 
+        field_offset = 0;
+        method_offset = 0;
         n.f3.accept(this, st);
         n.f4.accept(this, st);
 
@@ -83,12 +93,12 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(ClassExtendsDeclaration n, SymbolTable st) throws Exception {
-        n.f0.accept(this, st);
-
         String class_name = n.f1.accept(this, null);
-        n.f2.accept(this, st);
-        String super_class = n.f3.accept(this, null);
-        st.declare_class(class_name, super_class);
+        String super_class_name = n.f3.accept(this, null);
+        SymbolTable.ClassSymbol super_class = st.get_class(super_class_name);
+        field_offset = super_class.max_field_offset;
+        method_offset = super_class.max_method_offset;
+        st.declare_class(class_name, super_class_name, field_offset, method_offset);
         st.enter_class_scope(class_name);
 
         n.f5.accept(this, st);
@@ -105,16 +115,42 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
      * f2 -> ";"
      */
     public String visit(VarDeclaration n, SymbolTable st) throws Exception {
-        String _ret = null;
         String type = n.f0.accept(this, st);
         String var = n.f1.accept(this, st);
         if (st.current_method == null) {
-            st.declare_field(var, type);
+            if (!st.declare_field(var, type, field_offset)) {
+                throw new Exception("Identifier '" + var + "' already defined.");
+            }
+            switch (type) {
+                case "int":
+                    field_offset += 4;
+                    break;
+
+                case "boolean":
+                    field_offset += 1;
+                    break;
+
+                case "int[]":
+                    field_offset += 8;
+                    break;
+
+                case "boolean[]":
+                    field_offset += 8;
+                    break;
+
+                default:
+                    field_offset += 8;
+                    break;
+            }
+            SymbolTable.ClassSymbol curent_class = st.get_class(st.current_class);
+            curent_class.max_field_offset = field_offset;
         } else {
-            st.declare_var(var, type);
+            if (!st.declare_var(var, type)) {
+                throw new Exception("Identifier '" + var + "' already defined.");
+            }
         }
 
-        return _ret;
+        return null;
     }
 
     /**
@@ -139,7 +175,7 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
 
         String argument_list = n.f4.present() ? n.f4.accept(this, null) : "";
         if (argument_list == "") {
-            st.declare_method(my_name, my_type, List.of());
+            st.declare_method(my_name, my_type, List.of(), method_offset);
             return null;
         }
         String[] argument_list_split = argument_list.split(",");
@@ -152,9 +188,12 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
             }
         }
 
-        if (!st.declare_method(my_name, my_type, params)) {
+        if (!st.declare_method(my_name, my_type, params, method_offset)) {
             throw new Exception("Method " + my_name + " already declared in this scope");
         }
+        method_offset += 8;
+        SymbolTable.ClassSymbol current_class = st.get_class(st.current_class);
+        current_class.max_method_offset = method_offset;
         st.enter_method_scope(my_name);
         n.f7.accept(this, st);
         st.exit_method_scope();

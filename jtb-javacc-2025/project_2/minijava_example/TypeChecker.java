@@ -85,15 +85,6 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
         return null;
     }
 
-    private static boolean is_integer(String s) {
-        try {
-            Integer.parseInt(s);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
     /**
      * f0 -> "public"
      * f1 -> Type()
@@ -122,15 +113,11 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
 
         String return_type = n.f10.accept(this, st);
         if (!return_type.equals("int") && !return_type.equals("boolean") && !return_type.endsWith("[]")) {
-            if (is_integer(return_type)) {
-                return_type = "int";
-            } else {
-                SymbolTable.Symbol sym = st.lookup(return_type);
-                if (sym == null) {
-                    throw new Exception("Undefined identifier: " + return_type);
-                }
-                return_type = sym.type;
+            SymbolTable.Symbol sym = st.lookup(return_type);
+            if (sym == null) {
+                throw new Exception("Undefined identifier: " + return_type);
             }
+            return_type = sym.type;
         }
         if (!method.type.equals(return_type)) {
             throw new Exception("Return type mismatch in method: '" + st.current_class + "." + method_name
@@ -595,7 +582,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(IntegerLiteral n, SymbolTable st) throws Exception {
-        return n.f0.toString();
+        return "int";
     }
 
     /**
@@ -603,7 +590,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(TrueLiteral n, SymbolTable st) throws Exception {
-        return "true";
+        return "boolean";
     }
 
     /**
@@ -611,7 +598,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(FalseLiteral n, SymbolTable st) throws Exception {
-        return "false";
+        return "boolean";
     }
 
     /**
