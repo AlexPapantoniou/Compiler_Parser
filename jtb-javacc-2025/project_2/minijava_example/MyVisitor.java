@@ -117,106 +117,6 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         return _ret;
     }
 
-    // /**
-    // *
-    // * f0 -> "{"
-    // * f1 -> ( Statement() )*
-    // * f2 -> "}"
-    // */
-    // @Override
-    // public String visit(Block n, SymbolTable st) {
-    // st.enter_scope();
-    // try {
-    // n.f1.accept(this, st);
-    // } catch (Exception ex) {
-    // System.err.println(ex.getMessage());
-    // }
-    // st.exit_scope();
-    // return null;
-    // }
-
-    // /**
-    // * f0 -> "if"
-    // * f1 -> "("
-    // * f2 -> Expression()
-    // * f3 -> ")"
-    // * f4 -> Statement()
-    // * f5 -> "else"
-    // * f6 -> Statement()
-    // */
-    // @Override
-    // public String visit(IfStatement n, SymbolTable st) throws Exception {
-    // n.f4.accept(this, st); // if block
-    // n.f6.accept(this, st); // else block
-    // return null;
-    // }
-
-    // /**
-    // * f0 -> "while"
-    // * f1 -> "("
-    // * f2 -> Expression()
-    // * f3 -> ")"
-    // * f4 -> Statement()
-    // */
-    // @Override
-    // public String visit(WhileStatement n, SymbolTable st) throws Exception {
-    // n.f4.accept(this, st); // while block
-    // return null;
-    // }
-
-    // /**
-    // * f0 -> Identifier()
-    // * f1 -> "="
-    // * f2 -> Expression()
-    // * f3 -> ";"
-    // */
-    // @Override
-    // public String visit(AssignmentStatement n, SymbolTable st) throws Exception {
-    // String var = n.f0.accept(this, st);
-    // // Check if variable exists in symbol table
-    // SymbolTable.Symbol sym = st.lookup(var);
-    // if (sym == null) {
-    // throw new Exception("Variable " + var + " not declared");
-    // }
-    // return null;
-    // }
-
-    // /**
-    // * f0 -> Identifier()
-    // * f1 -> "["
-    // * f2 -> Expression()
-    // * f3 -> "]"
-    // * f4 -> "="
-    // * f5 -> Expression()
-    // * f6 -> ";"
-    // */
-    // @Override
-    // public String visit(ArrayAssignmentStatement n, SymbolTable st) throws
-    // Exception {
-    // String array = n.f0.accept(this, st);
-    // // Check if array exists in symbol table
-    // SymbolTable.Symbol sym = st.lookup(array);
-    // if (sym == null) {
-    // throw new Exception("Array " + array + " not declared");
-    // }
-    // if (!sym.type.equals("int[]") && !sym.type.equals("boolean[]")) {
-    // throw new Exception(array + " is not an array");
-    // }
-    // return null;
-    // }
-
-    // /**
-    // * f0 -> "System.out.println"
-    // * f1 -> "("
-    // * f2 -> Expression()
-    // * f3 -> ")"
-    // * f4 -> ";"
-    // */
-    // @Override
-    // public String visit(PrintStatement n, SymbolTable st) throws Exception {
-    // return n.f2.accept(this, st);
-    // }
-
     /**
      * f0 -> "public"
      * f1 -> Type()
@@ -238,6 +138,10 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         String my_name = n.f2.accept(this, null);
 
         String argument_list = n.f4.present() ? n.f4.accept(this, null) : "";
+        if (argument_list == "") {
+            st.declare_method(my_name, my_type, List.of());
+            return null;
+        }
         String[] argument_list_split = argument_list.split(",");
         List<SymbolTable.Param> params = new ArrayList<>();
         for (String argument : argument_list_split) {

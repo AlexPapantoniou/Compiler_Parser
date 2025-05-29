@@ -336,6 +336,26 @@ public class SymbolTable {
         return false;
     }
 
+    public void entet_scope_typeckeck() {
+        current_scope++;
+    }
+
+    public void enter_class_scope_typecheck(String class_name) {
+        current_class = class_name;
+    }
+
+    public void enter_method_scope_typecheck(String method_name) {
+        current_method = lookup_method(current_class, method_name);
+    }
+
+    public void exit_class_scope_typecheck() {
+        current_class = null;
+    }
+
+    public void exit_method_scope_typecheck() {
+        current_method = null;
+    }
+
     /**
      * Lookup a variable by name searching from innermost scope outward.
      * Does NOT look inside classes or methods.
@@ -344,13 +364,11 @@ public class SymbolTable {
      * returns Symbol or null if not found
      */
     public Symbol lookup(String name) {
-        for (int i = current_scope; i >= 0; i--) {
-            Symbol sym = scopes.get(i).get(name);
-            if (sym != null) {
-                return sym;
-            }
+        Symbol sym = current_method.method_locals.get(name);
+        if (sym == null) {
+            sym = lookup_field(current_class, name);
         }
-        return null;
+        return sym;
     }
 
     /**
