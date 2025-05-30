@@ -176,10 +176,12 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
         }
         String right_type = n.f2.accept(this, st);
         if (left_sym.type.equals(right_type)) {
+            // If the types are the same end
             return null;
         } else if (!right_type.equals("int") && !right_type.equals("boolean") && !right_type.endsWith("[]")) {
             SymbolTable.ClassSymbol custom_type_class = null;
             if (right_type.equals("this")) {
+                // "this" is the current class stored in the SymbolTable
                 custom_type_class = st.get_class(st.current_class);
                 if (left_sym.type.equals(custom_type_class.name)) {
                     return null;
@@ -188,6 +190,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                     right_type = custom_type_class.super_class;
                 }
             } else if (st.is_class(right_type)) {
+                // Right type is a class_type
                 custom_type_class = st.get_class(right_type);
                 if (custom_type_class == null) {
                     throw new Exception("Unknown type: " + right_type);
@@ -196,6 +199,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                     right_type = custom_type_class.super_class;
                 }
             } else {
+                // right_type is a variable/field
                 SymbolTable.Symbol sym = st.lookup(right_type);
                 if (sym == null) {
                     throw new Exception("Undefined identifier: " + right_type);
@@ -205,6 +209,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
         }
 
         if (!left_sym.type.equals(right_type)) {
+            // Search the inheritance tree for the type
             boolean found = false;
             while (right_type != null) {
                 right_type = st.get_class(right_type).super_class;
@@ -244,10 +249,8 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
             throw new Exception("Identifier " + left + "'s type is " + left_sym.type);
         }
         String index = n.f2.accept(this, st);
-        if (index.equals("boolean") || index.endsWith("[]") || st.is_class(index)) {
-            throw new Exception("Expected 'int' expression.");
-        }
         if (!index.equals("int")) {
+            // If the expression is not "int" it's a variable/field name
             SymbolTable.Symbol sym = st.lookup(index);
             if (sym == null) {
                 throw new Exception("Undefined identifier: " + index);
@@ -258,6 +261,8 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
         }
         String right_type = n.f5.accept(this, st);
         String left_type_stripped = left_sym.type.substring(0, left_sym.type.length() - 2);
+        // Right type can only be 'int' or 'boolean' (only 'int' and 'boolean' arrays in
+        // minijava)
         if (!right_type.equals("int") && !right_type.equals("boolean")) {
             if (st.is_class(right_type)) {
                 throw new Exception("Type mismatch: " + left_type_stripped + " != " + right_type);
@@ -349,6 +354,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                 throw new Exception("Undefined identifier: " + printing);
             }
             if (!sym.type.equals("int") && !sym.type.equals("boolean")) {
+                // Only print 'int' and 'boolean' expressions
                 throw new Exception("Can't print type: " + printing);
             }
         }
@@ -379,20 +385,22 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
     @Override
     public String visit(AndExpression n, SymbolTable st) throws Exception {
         String left_clause = n.f0.accept(this, st);
-        String right_clause = n.f2.accept(this, st);
         if (!left_clause.equals("boolean")) {
             SymbolTable.Symbol left_sym = st.lookup(left_clause);
             if (left_sym == null) {
                 throw new Exception("Undefined identifier: " + left_clause);
             } else if (!left_sym.type.equals("boolean")) {
+                // Only accept 'boolean' expressions
                 throw new Exception("Expected 'boolean' expression.");
             }
         }
+        String right_clause = n.f2.accept(this, st);
         if (!right_clause.equals("boolean")) {
             SymbolTable.Symbol right_sym = st.lookup(right_clause);
             if (right_sym == null) {
                 throw new Exception("Undefined identifier: " + right_clause);
             } else if (!right_sym.type.equals("boolean")) {
+                // Only accept 'boolean' expressions
                 throw new Exception("Expected 'boolean' expression.");
             }
         }
@@ -407,20 +415,22 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
     @Override
     public String visit(CompareExpression n, SymbolTable st) throws Exception {
         String left_prim = n.f0.accept(this, st);
-        String right_prim = n.f2.accept(this, st);
         if (!left_prim.equals("int")) {
             SymbolTable.Symbol left_sym = st.lookup(left_prim);
             if (left_sym == null) {
                 throw new Exception("Undefined identifier: " + left_prim);
             } else if (!left_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
+        String right_prim = n.f2.accept(this, st);
         if (!right_prim.equals("int")) {
             SymbolTable.Symbol right_sym = st.lookup(right_prim);
             if (right_sym == null) {
                 throw new Exception("Undefined identifier: " + right_prim);
             } else if (!right_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
@@ -435,20 +445,22 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
     @Override
     public String visit(PlusExpression n, SymbolTable st) throws Exception {
         String left_prim = n.f0.accept(this, st);
-        String right_prim = n.f2.accept(this, st);
         if (!left_prim.equals("int")) {
             SymbolTable.Symbol left_sym = st.lookup(left_prim);
             if (left_sym == null) {
                 throw new Exception("Undefined identifier: " + left_prim);
             } else if (!left_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
+        String right_prim = n.f2.accept(this, st);
         if (!right_prim.equals("int")) {
             SymbolTable.Symbol right_sym = st.lookup(right_prim);
             if (right_sym == null) {
                 throw new Exception("Undefined identifier: " + right_prim);
             } else if (!right_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
@@ -463,20 +475,22 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
     @Override
     public String visit(MinusExpression n, SymbolTable st) throws Exception {
         String left_prim = n.f0.accept(this, st);
-        String right_prim = n.f2.accept(this, st);
         if (!left_prim.equals("int")) {
             SymbolTable.Symbol left_sym = st.lookup(left_prim);
             if (left_sym == null) {
                 throw new Exception("Undefined identifier: " + left_prim);
             } else if (!left_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
+        String right_prim = n.f2.accept(this, st);
         if (!right_prim.equals("int")) {
             SymbolTable.Symbol right_sym = st.lookup(right_prim);
             if (right_sym == null) {
                 throw new Exception("Undefined identifier: " + right_prim);
             } else if (!right_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
@@ -491,20 +505,22 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
     @Override
     public String visit(TimesExpression n, SymbolTable st) throws Exception {
         String left_prim = n.f0.accept(this, st);
-        String right_prim = n.f2.accept(this, st);
         if (!left_prim.equals("int")) {
             SymbolTable.Symbol left_sym = st.lookup(left_prim);
             if (left_sym == null) {
                 throw new Exception("Undefined identifier: " + left_prim);
             } else if (!left_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
+        String right_prim = n.f2.accept(this, st);
         if (!right_prim.equals("int")) {
             SymbolTable.Symbol right_sym = st.lookup(right_prim);
             if (right_sym == null) {
                 throw new Exception("Undefined identifier: " + right_prim);
             } else if (!right_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
@@ -534,6 +550,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                 throw new Exception("Undefined identifier: " + index);
             }
             if (!index_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression. found " + index_sym.type);
             }
         }
@@ -553,6 +570,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
             throw new Exception("Undefined identifier: " + prim_expr);
         }
         if (!sym.type.endsWith("[]")) {
+            // Accept only array variables/fields
             throw new Exception(prim_expr + " variable is not an array.");
         }
 
@@ -573,6 +591,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
 
         SymbolTable.ClassSymbol class_sym = null;
 
+        // Find the class type of the "sender"
         if (prim_expr.equals("this")) {
             class_sym = st.get_class(st.current_class);
         } else if (st.is_class(prim_expr)) {
@@ -589,7 +608,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
         }
 
         String method_name = n.f2.accept(this, st);
-        SymbolTable.Symbol method = st.lookup_method(class_sym.name, method_name);
+        SymbolTable.Symbol method = st.lookup_method(class_sym.name, method_name); // Find the method in the "sender"
         if (method == null) {
             throw new Exception("Class '" + class_sym.name + "' does not contain any field '" + method_name + "'.");
         }
@@ -602,13 +621,16 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
 
             return method.type;
         }
-        String[] argument_list_split = argument_list.split(",");
+        String[] argument_list_split = argument_list.split(","); // Split the argument list
         int i;
         if (argument_list_split.length < method.params.size()) {
+            // Continue only if th argument list has at least as many arguments as the
+            // method declaration
             throw new Exception("Too few arguments in function call. Expected " + method.params.size() + ", found "
                     + argument_list_split.length);
         }
         for (i = 0; i < method.params.size(); i++) {
+            // Check the type of each argument-parameter individually
             SymbolTable.Param param = method.params.get(i);
             String argument_type = argument_list_split[i];
             if (!argument_type.equals("int") && !argument_type.equals("boolean") && !argument_type.endsWith("[]") &&
@@ -625,6 +647,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                 }
             }
             if (!param.type.equals(argument_type)) {
+                // Find the type in the inheritance tree
                 while (argument_type != null) {
                     argument_type = st.get_class(argument_type).super_class;
                     if (argument_type.equals(param.type)) {
@@ -783,6 +806,8 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
 
     @Override
     public String visit(Identifier n, SymbolTable st) {
+        // Returns the name of the identifier - not the type (needed in method
+        // declaration)
         return n.f0.toString();
     }
 
@@ -818,6 +843,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                 throw new Exception("Undefined identifier: " + size);
             }
             if (size_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }
@@ -839,6 +865,7 @@ public class TypeChecker extends GJDepthFirst<String, SymbolTable> {
                 throw new Exception("Undefined identifier: " + size);
             }
             if (!size_sym.type.equals("int")) {
+                // Only accept 'int' expressions
                 throw new Exception("Expected 'int' expression.");
             }
         }

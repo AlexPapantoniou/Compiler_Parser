@@ -64,13 +64,8 @@ public class SymbolTable {
 
     }
 
-    // List of nested scopes representing variables defined in blocks/methods
-    // private final List<Map<String, Symbol>> scopes = new ArrayList<>();
-
     // Map of class name to ClassSymbol representing declared classes
     private final Map<String, ClassSymbol> classes = new LinkedHashMap<>();
-
-    // Current index into scopes list
 
     // Track method scope start index and the current method symbol for locals
     // tracking
