@@ -24,10 +24,6 @@ public class SymbolTable {
             this.kind = kind;
         }
 
-        @Override
-        public String toString() {
-            return type + " " + name;
-        }
     }
 
     // Symbol representing variables, methods, fields, etc.
@@ -36,42 +32,18 @@ public class SymbolTable {
         public final Kind kind; // kind (variable, method, etc)
         public final String type; // type info (e.g. "int", "boolean", "table")
         public final List<Param> params; // method parameters (if kind==METHOD)
-        public Object value; // assigned value (for debugging)
-        public final int scopeLevel; // scope depth level (0=outermost)
         public Map<String, Symbol> method_locals; // local variables in method scope (only for METHOD)
-        public int method_start_scope; // start index of method scope in scopes list
-        public int method_finish_scope; // start index of method scope in scopes list
         public int offset;
 
-        public Symbol(String name, Kind kind, String type, List<Param> params, Object value, int scopeLevel,
-                int offset) {
+        public Symbol(String name, Kind kind, String type, List<Param> params, int offset) {
             this.name = name;
             this.kind = kind;
             this.type = type;
             this.params = params;
-            this.value = value;
-            this.scopeLevel = scopeLevel;
-            // Initialize method locals map only for methods
-            if (kind == Kind.METHOD) {
-                this.method_locals = new LinkedHashMap<>();
-            } else {
-                this.method_locals = null; // no locals for non-method symbols
-            }
-            this.method_start_scope = -1;
-            this.method_finish_scope = -1;
+            this.method_locals = null;
             this.offset = offset;
         }
 
-        @Override
-        public String toString() {
-            if (kind == Kind.METHOD) {
-                return String.format("%s{name='%s', return_type='%s', params=%s, scope=%d, locals=%s}",
-                        kind, name, type, params, scopeLevel, method_locals == null ? "null" : method_locals.keySet());
-            } else {
-                return String.format("%s{name='%s', type='%s', value=%s, scope=%d}",
-                        kind, name, type, value, scopeLevel);
-            }
-        }
     }
 
     // Represents a class with its fields and methods, plus optional super_class
@@ -90,58 +62,23 @@ public class SymbolTable {
             this.max_method_offset = max_method_offset;
         }
 
-        @Override
-        public String toString() {
-            return String.format("Class{name='%s', super='%s', fields=%s, methods=%s}",
-                    name, super_class, fields.keySet(), methods.keySet());
-        }
     }
 
     // List of nested scopes representing variables defined in blocks/methods
-    private final List<Map<String, Symbol>> scopes = new ArrayList<>();
+    // private final List<Map<String, Symbol>> scopes = new ArrayList<>();
 
     // Map of class name to ClassSymbol representing declared classes
     private final Map<String, ClassSymbol> classes = new LinkedHashMap<>();
 
     // Current index into scopes list
-    private int current_scope = -1;
 
     // Track method scope start index and the current method symbol for locals
     // tracking
-    private int method_start_scope = -1;
     public Symbol current_method = null;
 
     // Track the current class
     public String current_class = null;
-
-    /**
-     * Enter a new nested scope (block or method)
-     * Adds an empty scope map and updates current_scope
-     */
-    public void enter_scope() {
-        scopes.add(new HashMap<>());
-        current_scope = scopes.size() - 1;
-    }
-
-    /**
-     * Exit the current nested scope (only for inner blocks inside methods)
-     * Collects all variables declared in this scope into current method locals.
-     * Throws if trying to exit a method scope via this function.
-     */
-    public void exit_scope() {
-        if (method_start_scope != -1 && current_scope <= method_start_scope) {
-            throw new IllegalStateException(
-                    "Cannot exit method scope using exit_scope(), use exit_method_scope() instead.");
-        }
-        current_method.method_finish_scope = current_scope;
-        // Remove current scope from stack and collect its locals into current method
-        // locals
-        Map<String, Symbol> exiting_scope = scopes.remove(current_scope);
-        current_scope--;
-        if (current_method != null && exiting_scope != null) {
-            current_method.method_locals.putAll(exiting_scope);
-        }
-    }
+    public String main_class = null;
 
     public void enter_class_scope(String class_name) {
         current_class = class_name;
@@ -159,9 +96,6 @@ public class SymbolTable {
      * method_name: the method name
      */
     public void enter_method_scope(String method_name) {
-        enter_scope(); // method body scope
-        method_start_scope = current_scope; // mark where method scope started
-
         // Lookup class and method symbols
         ClassSymbol cls = classes.get(current_class);
         current_method = cls.methods.get(method_name);
@@ -173,47 +107,25 @@ public class SymbolTable {
         // Initialize locals map for this method and set the parameters as local
         // variables
         current_method.method_locals = new LinkedHashMap<>();
-        current_method.method_start_scope = method_start_scope;
-        current_method.method_finish_scope = method_start_scope;
 
         if (!current_method.params.isEmpty()) {
-            Map<String, Symbol> scope = scopes.get(current_scope);
             for (Param param : current_method.params) {
-                scope.put(param.name,
-                        new Symbol(param.name, param.kind, param.type, null, null, current_scope, 0));
+                current_method.method_locals.put(param.name,
+                        new Symbol(param.name, param.kind, param.type, null, 0));
             }
         }
     }
 
     /**
      * Exit the current method scope.
-     * Collects all nested block locals and the method's own scope locals into
-     * method_locals.
+     *
      * Cleans up and resets the method tracking state.
      */
     public void exit_method_scope() {
-        if (method_start_scope == -1 || current_method == null) {
+        if (current_method == null) {
             throw new IllegalStateException("Not currently in a method scope.");
         }
 
-        // Collect locals from all nested scopes inside method scope
-        while (current_scope > method_start_scope) {
-            Map<String, Symbol> nested_scope = scopes.remove(current_scope);
-            if (nested_scope != null) {
-                current_method.method_locals.putAll(nested_scope);
-            }
-            current_scope--;
-        }
-
-        // Collect locals from the method scope itself
-        Map<String, Symbol> method_scope = scopes.remove(current_scope);
-        if (method_scope != null) {
-            current_method.method_locals.putAll(method_scope);
-        }
-        current_scope--;
-
-        // Reset method scope tracking
-        method_start_scope = -1;
         current_method = null;
     }
 
@@ -225,17 +137,16 @@ public class SymbolTable {
      * returns false if already declared in this scope, true if declared
      * successfully
      */
-    public boolean declare_var(String var_name, String type) {
-        if (scopes.isEmpty()) {
-            // Enter scope if user forgot to
-            enter_scope();
+    public boolean declare_var(String var_name, String type) throws Exception {
+        if (current_method == null) {
+            throw new Exception("Can't declare variables outside method scopes. Use declare_field instead.");
         }
-        Map<String, Symbol> scope = scopes.get(current_scope);
-        if (scope.containsKey(var_name)) {
+        if (current_method.method_locals.containsKey(var_name)) {
             return false; // redeclaration in same scope not allowed
         }
         Kind kind = (type.endsWith("[]")) ? Kind.ARRAY : Kind.VARIABLE;
-        scope.put(var_name, new Symbol(var_name, kind, type, null, null, current_scope, 0));
+        current_method.method_locals.put(var_name, new Symbol(var_name, kind, type, null, 0));
+
         return true;
     }
 
@@ -251,6 +162,7 @@ public class SymbolTable {
             return false;
         }
         classes.put(class_name, new ClassSymbol(class_name, super_class, max_field_offset, max_method_offset));
+
         return true;
     }
 
@@ -268,7 +180,8 @@ public class SymbolTable {
             return false;
         }
         Kind kind = (type.endsWith("[]")) ? Kind.FIELD_ARRAY : Kind.FIELD_VARIABLE;
-        cls.fields.put(field_name, new Symbol(field_name, kind, type, null, null, 0, offset));
+        cls.fields.put(field_name, new Symbol(field_name, kind, type, null, offset));
+
         return true;
     }
 
@@ -321,30 +234,9 @@ public class SymbolTable {
                 }
             }
         }
-        cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, null, 0, offset));
+        cls.methods.put(method_name, new Symbol(method_name, Kind.METHOD, return_type, params, offset));
+
         return true;
-    }
-
-    /**
-     * Assign a value to a variable by name (searching from innermost scope outward)
-     * 
-     * name: variable name
-     * value: value to assign
-     * returns true if found and assigned, false if variable not found
-     */
-    public boolean assign(String name, Object value) {
-        for (int i = current_scope; i >= 0; i--) {
-            Symbol sym = scopes.get(i).get(name);
-            if (sym != null && sym.kind == Kind.VARIABLE) {
-                sym.value = value;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public void entet_scope_typeckeck() {
-        current_scope++;
     }
 
     public void enter_class_scope_typecheck(String class_name) {
@@ -440,73 +332,25 @@ public class SymbolTable {
      */
     public void print_offsets() {
         for (ClassSymbol cls : classes.values()) {
+            if (cls.name.equals(main_class)) {
+                continue;
+            }
+            System.err.println("--------Class " + cls.name + "--------");
+            System.err.println("--------Fields--------");
             for (Symbol field : cls.fields.values()) {
                 System.out.println(cls.name + "." + field.name + ": " + field.offset);
             }
+            System.err.println("--------Methods--------");
+            ClassSymbol super_class = null;
+            if (cls.super_class != null) {
+                super_class = get_class(cls.super_class);
+            }
             for (Symbol method : cls.methods.values()) {
-                System.out.println(cls.name + "." + method.name + ": " + method.offset);
+                if (super_class == null || !super_class.methods.containsKey(method.name)) {
+                    System.out.println(cls.name + "." + method.name + ": " + method.offset);
+                }
             }
         }
     }
 
-    public static void main(String[] args) {
-        // SymbolTable st = new SymbolTable();
-
-        // // Declare class Main and its main method
-        // st.declare_class("Main", null);
-        // st.declare_method("main", "void", List.of());
-
-        // // Enter the method scope for main (begin tracking method locals)
-        // st.enter_method_scope("main");
-
-        // // Declare variables in main method scope and nested blocks
-        // st.declare_var("temp", "int");
-        // st.assign("temp", 100);
-
-        // // if block scope inside main method
-        // st.enter_scope();
-        // st.declare_var("cond", "boolean");
-        // st.assign("cond", true);
-        // st.exit_scope(); // exit if block, locals merged into main method locals
-
-        // // while block scope inside main method
-        // st.enter_scope();
-        // st.declare_var("counter", "int");
-        // st.assign("counter", 0);
-        // st.exit_scope(); // exit while block, locals merged into main method locals
-
-        // // Exit method scope: gather all locals declared in main method
-        // st.exit_method_scope();
-
-        // // Declare classes Animal and Dog with inheritance
-        // st.declare_class("Animal", null);
-        // st.declare_field("age", "int[]");
-        // st.declare_method("speak", "void", List.of(new Param("temp", "boolean",
-        // Kind.VARIABLE)));
-        // st.enter_method_scope("speak");
-        // // st.declare_var("temp", "int");
-        // st.exit_method_scope();
-
-        // st.declare_class("Dog", "Animal");
-        // st.declare_field("breed", "string");
-        // st.declare_method("bark", "void", List.of());
-        // st.enter_method_scope("bark");
-        // st.declare_var("temp", "int");
-        // st.exit_method_scope();
-
-        // // Print all scopes and classes with methods and locals
-        // st.print_all();
-
-        // // Lookup inherited method speak on Dog class
-        // Symbol speak = st.lookup_method("Dog", "speak");
-        // System.out.println("\nLookup Dog.speak (inherited method): " + speak);
-        // System.out.println("Lookup local variables in Dog.speak (should be null): " +
-        // (speak == null ? null : speak.method_locals));
-
-        // // Lookup main method in Main class and its locals
-        // Symbol mainMethod = st.lookup_method("Main", "main");
-        // System.out.println("\nLookup Main.main method: " + mainMethod);
-        // System.out.println("Lookup local variable 'temp' in Main.main: " +
-        // (mainMethod == null ? null : mainMethod.method_locals.get("temp")));
-    }
 }

@@ -24,9 +24,9 @@ public class Main {
 
             SymbolTable st = new SymbolTable();
             root.accept(my_vis, st);
+            st.print_offsets();
             TypeChecker typechecker = new TypeChecker();
             root.accept(typechecker, st);
-            st.print_offsets();
 
         } catch (ParseException ex) {
             System.out.println(ex.getMessage());

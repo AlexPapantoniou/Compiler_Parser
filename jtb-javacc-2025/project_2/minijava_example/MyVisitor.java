@@ -33,6 +33,7 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
     public String visit(MainClass n, SymbolTable st) throws Exception {
         String class_name = n.f1.accept(this, st);
         st.declare_class(class_name, null, 0, 0);
+        st.main_class = class_name;
         st.enter_class_scope(class_name);
 
         field_offset = 0;
@@ -40,9 +41,6 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         String param_name = n.f11.accept(this, st);
         st.declare_method("main", "void",
                 List.of(new SymbolTable.Param(param_name, "String[]", SymbolTable.Kind.ARRAY)), method_offset);
-        method_offset += 8;
-        SymbolTable.ClassSymbol main_class = st.get_class(class_name);
-        main_class.max_method_offset = method_offset;
 
         st.enter_method_scope("main");
         super.visit(n, st);
@@ -63,12 +61,9 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
      */
     @Override
     public String visit(ClassDeclaration n, SymbolTable st) throws Exception {
-        n.f0.accept(this, st);
-
         String class_name = n.f1.accept(this, st);
         st.declare_class(class_name, null, 0, 0);
 
-        n.f2.accept(this, st);
         st.enter_class_scope(class_name);
 
         field_offset = 0;
@@ -96,6 +91,9 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         String class_name = n.f1.accept(this, null);
         String super_class_name = n.f3.accept(this, null);
         SymbolTable.ClassSymbol super_class = st.get_class(super_class_name);
+        if (super_class == null) {
+            throw new Exception("Unknown class type: " + super_class_name);
+        }
         field_offset = super_class.max_field_offset;
         method_offset = super_class.max_method_offset;
         st.declare_class(class_name, super_class_name, field_offset, method_offset);
@@ -176,21 +174,22 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
         String argument_list = n.f4.present() ? n.f4.accept(this, null) : "";
         if (argument_list == "") {
             st.declare_method(my_name, my_type, List.of(), method_offset);
-            return null;
-        }
-        String[] argument_list_split = argument_list.split(",");
-        List<SymbolTable.Param> params = new ArrayList<>();
-        for (String argument : argument_list_split) {
-            String[] parts = argument.trim().split("\\s+");
-            if (parts.length == 2) {
-                params.add(new SymbolTable.Param(parts[1], parts[0],
-                        parts[0].endsWith("[]") ? SymbolTable.Kind.ARRAY : SymbolTable.Kind.VARIABLE));
+        } else {
+            String[] argument_list_split = argument_list.split(",");
+            List<SymbolTable.Param> params = new ArrayList<>();
+            for (String argument : argument_list_split) {
+                String[] parts = argument.trim().split("\\s+");
+                if (parts.length == 2) {
+                    params.add(new SymbolTable.Param(parts[1], parts[0],
+                            parts[0].endsWith("[]") ? SymbolTable.Kind.ARRAY : SymbolTable.Kind.VARIABLE));
+                }
+            }
+
+            if (!st.declare_method(my_name, my_type, params, method_offset)) {
+                throw new Exception("Method " + my_name + " already declared in this scope");
             }
         }
 
-        if (!st.declare_method(my_name, my_type, params, method_offset)) {
-            throw new Exception("Method " + my_name + " already declared in this scope");
-        }
         method_offset += 8;
         SymbolTable.ClassSymbol current_class = st.get_class(st.current_class);
         current_class.max_method_offset = method_offset;
@@ -250,8 +249,13 @@ class MyVisitor extends GJDepthFirst<String, SymbolTable> {
     }
 
     @Override
-    public String visit(ArrayType n, SymbolTable st) {
+    public String visit(IntegerArrayType n, SymbolTable st) {
         return "int[]";
+    }
+
+    @Override
+    public String visit(BooleanArrayType n, SymbolTable st) {
+        return "boolean[]";
     }
 
     public String visit(BooleanType n, SymbolTable st) {
